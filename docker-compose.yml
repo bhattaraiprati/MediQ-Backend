@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+
+  # ── Your Node.js Backend ──────────────────────────────────────────────────────
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      # Override Ollama URL to point to the ollama service inside Docker network
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - mediq-network
+    restart: unless-stopped
+
+  # ── Ollama AI Model Server ────────────────────────────────────────────────────
+  # Runs AI models locally. We use it to generate text embeddings.
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      # Persists downloaded models so you don't re-download on every restart
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mediq-network
+    restart: unless-stopped
+
+  # ── One-time Model Downloader ─────────────────────────────────────────────────
+  # Runs once after Ollama is healthy to pull the embedding model.
+  # Exits automatically after the model is downloaded.
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["ollama", "pull", "nomic-embed-text"]
+    networks:
+      - mediq-network
+    restart: "no" # run once and exit
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  ollama_data: # persists Ollama models between container restarts
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  mediq-network:
+    driver: bridge
