@@ -5,6 +5,7 @@ import cors from 'cors'
 import sequelize from './config/db';
 import userRoutes from './routes/userRoutes';
 import documentRoutes from './routes/documentRoutes';
+import chatRoutes from './routes/chatRoutes';
 
 dotenv.config()
 
@@ -24,6 +25,7 @@ app.use(cors({
 app.use(express.json());
 app.use('/api/auth', userRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/chat', chatRoutes);
 
 
 app.get('/health', (req, res) => {

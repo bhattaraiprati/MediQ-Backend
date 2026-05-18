@@ -6,16 +6,12 @@ import { Document } from '../models/Document';
 import { DocumentChunk } from '../models/DocumentChunk';
 import { documentStatus } from '../types/Enum';
 
-// Setup Ollama Embeddings 
-// Connects to Ollama (running in Docker) to generate embeddings.
-// OLLAMA_BASE_URL = 'http://ollama:11434' inside Docker
-// OLLAMA_BASE_URL = 'http://localhost:11434' when running locally
+
 const embeddings = new OllamaEmbeddings({
-    model: 'nomic-embed-text', // lightweight embedding model, outputs 768 numbers
+    model: 'nomic-embed-text', // outputs 768 vector numbers
     baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
 });
 
-//  Setup Pinecone Client
 const pinecone = new Pinecone({
     apiKey: process.env.PINECONE_API_KEY!,
 });
@@ -27,47 +23,42 @@ const textSplitter = new RecursiveCharacterTextSplitter({
     chunkOverlap: 50,  // 50-char overlap to preserve context at boundaries
 });
 
-//  Main Export Function
 /**
- * Takes extracted text and a document DB record ID.
- * Splits into chunks → embeds each via Ollama → stores vectors in Pinecone
- * → saves chunk metadata to PostgreSQL.
+ * Splits text into chunks -> embeds each via Ollama -> stores vectors in Pinecone
+ * -> saves chunk metadata to PostgreSQL.
  */
 export async function embedAndStoreDocument(
     extractedText: string,
     documentId: string
 ): Promise<void> {
-    // Mark document as 'processing' in DB
+
     await Document.update(
         { processing_status: documentStatus.PROCESSING },
         { where: { id: documentId } }
     );
 
     try {
-        //  Split text into chunks
+        //  Split large text files into chunks
         const docs = await textSplitter.createDocuments([extractedText]);
         console.log(`Split into ${docs.length} chunks`);
 
-        //  Get the Pinecone index
-        // This index must already exist in your Pinecone dashboard with 768 dimensions
         const indexName = process.env.PINECONE_INDEX_NAME!;
         const index = pinecone.index(indexName);
 
-        //  Embed each chunk and upsert to Pinecone
+        //  Embed each chunk and store in Pinecone
         const chunkRecords: Array<{
             chunk_index: number;
             text: string;
             pinecone_vector_id: string;
         }> = [];
 
-        // Process in batches to avoid overwhelming Ollama
+        // To avoid overwhelming Ollama batch is processed 
         const BATCH_SIZE = 10;
         for (let i = 0; i < docs.length; i += BATCH_SIZE) {
             const batch = docs.slice(i, i + BATCH_SIZE);
             const texts = batch.map((doc) => doc.pageContent);
 
-            // Send texts to Ollama → get back array of vectors
-            // e.g. [[0.12, 0.87, ...], [0.34, -0.22, ...], ...]
+
             const vectors = await embeddings.embedDocuments(texts);
 
             const pineconeVectors = vectors.map((vector, batchIdx) => {
@@ -82,11 +73,11 @@ export async function embedAndStoreDocument(
 
                 return {
                     id: vectorId,
-                    values: vector,             // the actual 768 numbers
+                    values: vector,    // the  768 numbers
                     metadata: {
                         document_id: documentId,
                         chunk_index: globalIdx,
-                        text: texts[batchIdx],  // stored for easy retrieval during search
+                        text: texts[batchIdx], 
                     },
                 };
             });
@@ -118,7 +109,7 @@ export async function embedAndStoreDocument(
 
         console.log(`Document ${documentId} embedded successfully. Chunks: ${chunkRecords.length}`);
     } catch (error) {
-        // If anything fails, mark document as 'failed'
+        // If anything fails, change the status of document to 'failed'
         await Document.update(
             { processing_status: documentStatus.FAILED },
             { where: { id: documentId } }
