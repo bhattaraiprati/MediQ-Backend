@@ -1,12 +1,13 @@
-import { ChatOllama } from '@langchain/ollama';
+import { ChatGroq } from '@langchain/groq';
 import { findSimilarChunks } from './SimalaritySearch';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 
-const llm = new ChatOllama({
-    model: process.env.OLLAMA_CHAT_MODEL || 'llama3',
-    baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+const llm = new ChatGroq({
+    model: 'llama-3.3-70b-versatile',  // or mixtral-8x7b-32768
+    apiKey: process.env.GROQ_API_KEY!,
     temperature: 0.2,
-    keepAlive: '5m',
 });
+
 
 export interface ChatResponse {
     answer: string;
@@ -19,7 +20,7 @@ export interface ChatResponse {
 
 export async function generateChatResponse(
     query: string,
-    topK: number = 10       // increased: 3 files × ~3-4 relevant chunks each
+    topK: number = 10     
 ): Promise<ChatResponse> {
 
     // Step 1: Retrieve similar chunks from Pinecone
@@ -33,8 +34,7 @@ export async function generateChatResponse(
     }
 
     // Step 2: Build context string from retrieved chunks
-    // ── FIX: filter low-confidence matches to avoid noise ──
-    const relevantMatches = matches.filter((m) => (m.score ?? 0) >= 0.5);
+    const relevantMatches = matches.filter((m) => (m.score ?? 0) >= 0.25);
 
     if (relevantMatches.length === 0) {
         return {
@@ -49,7 +49,7 @@ export async function generateChatResponse(
         .join('\n\n---\n\n');
 
     // Step 3: Build the RAG prompt
-    // ── FIX: contextChunks is now actually inserted into the prompt ──
+
     const prompt = `You are MediQ, a helpful and accurate Pharmaceutical AI assistant.
 
 Below are excerpts from the uploaded pharmaceutical documents. Use ALL of the provided context to give a thorough, detailed answer. Do not summarise briefly — include all relevant properties, mechanisms, indications, dosages, side effects, interactions, and related compounds mentioned across the sources.

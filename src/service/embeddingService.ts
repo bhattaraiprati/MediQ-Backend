@@ -1,32 +1,21 @@
-import { OllamaEmbeddings } from '@langchain/ollama';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { v4 as uuidv4 } from 'uuid';
 import { Document } from '../models/Document';
 import { DocumentChunk } from '../models/DocumentChunk';
 import { documentStatus } from '../types/Enum';
-
-
-const embeddings = new OllamaEmbeddings({
-    model: 'nomic-embed-text', // outputs 768 vector numbers
-    baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
-});
+import { getJinaEmbeddings } from './jinaService';
 
 const pinecone = new Pinecone({
     apiKey: process.env.PINECONE_API_KEY!,
 });
 
-//  Text Splitter
-// Splits a large text into smaller overlapping chunks
+
 const textSplitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 500,    // each chunk is ~500 characters
-    chunkOverlap: 50,  // 50-char overlap to preserve context at boundaries
+    chunkSize: 1500,
+    chunkOverlap: 200,
 });
 
-/**
- * Splits text into chunks -> embeds each via Ollama -> stores vectors in Pinecone
- * -> saves chunk metadata to PostgreSQL.
- */
 export async function embedAndStoreDocument(
     extractedText: string,
     documentId: string
@@ -38,28 +27,42 @@ export async function embedAndStoreDocument(
     );
 
     try {
-        //  Split large text files into chunks
         const docs = await textSplitter.createDocuments([extractedText]);
         console.log(`Split into ${docs.length} chunks`);
 
         const indexName = process.env.PINECONE_INDEX_NAME!;
         const index = pinecone.index(indexName);
 
-        //  Embed each chunk and store in Pinecone
         const chunkRecords: Array<{
             chunk_index: number;
             text: string;
             pinecone_vector_id: string;
         }> = [];
 
-        // To avoid overwhelming Ollama batch is processed 
-        const BATCH_SIZE = 10;
+        const BATCH_SIZE = 5;
+        const delay_ms = 1000;
         for (let i = 0; i < docs.length; i += BATCH_SIZE) {
             const batch = docs.slice(i, i + BATCH_SIZE);
-            const texts = batch.map((doc) => doc.pageContent);
 
+            // ← Filter empty/whitespace chunks BEFORE sending to embedding API
+            const texts = batch
+                .map((doc) => doc.pageContent)
+                .filter((text) => text && text.trim().length > 10); // min 10 chars
 
-            const vectors = await embeddings.embedDocuments(texts);
+            if (texts.length === 0) {
+                console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1} skipped — all chunks were empty`);
+                continue;  // skip this batch entirely
+            }
+
+            const vectors = await getJinaEmbeddings(texts);
+
+            // Guard: catch any remaining empty vector responses
+            if (!vectors || vectors.length === 0 || vectors[0].length === 0) {
+                console.warn(`Batch ${Math.floor(i / BATCH_SIZE) + 1} returned empty vectors — skipping`);
+                continue;
+            }
+
+            console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1} vector dimensions: ${vectors[0].length}`);
 
             const pineconeVectors = vectors.map((vector, batchIdx) => {
                 const globalIdx = i + batchIdx;
@@ -73,21 +76,20 @@ export async function embedAndStoreDocument(
 
                 return {
                     id: vectorId,
-                    values: vector,    // the  768 numbers
+                    values: vector,
                     metadata: {
                         document_id: documentId,
                         chunk_index: globalIdx,
-                        text: texts[batchIdx], 
+                        text: texts[batchIdx],
                     },
                 };
             });
 
-            // Upload this batch to Pinecone
             await index.upsert(pineconeVectors);
             console.log(`Upserted batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(docs.length / BATCH_SIZE)}`);
+            await new Promise((resolve) => setTimeout(resolve, delay_ms));
         }
 
-        //  Save chunk records to PostgreSQL
         const dbChunks = chunkRecords.map((chunk) => ({
             id: uuidv4(),
             document_id: documentId,
@@ -98,7 +100,6 @@ export async function embedAndStoreDocument(
 
         await DocumentChunk.bulkCreate(dbChunks);
 
-        //  Mark document as completed
         await Document.update(
             {
                 processing_status: documentStatus.COMPLETED,
@@ -109,7 +110,6 @@ export async function embedAndStoreDocument(
 
         console.log(`Document ${documentId} embedded successfully. Chunks: ${chunkRecords.length}`);
     } catch (error) {
-        // If anything fails, change the status of document to 'failed'
         await Document.update(
             { processing_status: documentStatus.FAILED },
             { where: { id: documentId } }

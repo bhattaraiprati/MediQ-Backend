@@ -8,6 +8,9 @@ export class User extends Model {
     declare email: string;
     declare password: string;
     declare role: roleEnum;
+    declare profilePicture: string;
+    declare isVerified: boolean;
+    declare verificationToken: string | null;
 }
 
 User.init({
@@ -26,6 +29,18 @@ User.init({
     role: {
         type: DataTypes.STRING,
         defaultValue: roleEnum.USER
+    },
+    isVerified: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+    },
+    verificationToken: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    profilePicture: {
+        type: DataTypes.STRING,
+        allowNull: true
     }
 }, {
     sequelize,
