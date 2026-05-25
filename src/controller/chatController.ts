@@ -1,33 +1,74 @@
-import { Response } from 'express';
-import { AuthRequest } from '../middleware/authmiddleware';
-import { generateChatResponse } from '../service/chatService';
+// controller/chatController.ts
+import { Response } from "express";
+import { AuthRequest } from "../middleware/authmiddleware";
+import { generateChatResponse } from "../service/chatService";
+import { chatRepository } from "../repository/chatRepository";
+import { messageRepository } from "../repository/messageRepository";
 
-/**
- * POST /api/chat
- * Body: { query: string, topK?: number }
- *
- * Runs the full RAG pipeline and returns an LLM-generated answer
- * grounded in the user's uploaded documents.
- */
+// POST /api/chat  — send a message (creates chat if no chat_id)
 export async function chat(req: AuthRequest, res: Response): Promise<void> {
     const { query, topK } = req.body;
-
-    if (!query || typeof query !== 'string' || query.trim() === '') {
-        res.status(400).json({ message: 'query is required and must be a non-empty string.' });
-        return;
-    }
+    const currentChat = req.chat!; // guaranteed by chatRoomMiddleware
 
     try {
-        const result = await generateChatResponse(query.trim(), topK ?? 5);
+        const result = await generateChatResponse(currentChat, query.trim(), topK ?? 7);
 
         res.status(200).json({
             success: true,
+            chat_id: result.chat_id,   // frontend stores this for follow-up messages
             query,
             answer: result.answer,
-            // sources: result.sources,
         });
     } catch (error) {
-        console.error('Chat error:', error);
-        res.status(500).json({ message: 'Failed to generate a response. Please try again.' });
+        console.error("Chat error:", error);
+        res.status(500).json({ message: "Failed to generate a response. Please try again." });
+    }
+}
+
+// GET /api/chat  — list all chat rooms for the sidebar
+export async function getAllChats(req: AuthRequest, res: Response): Promise<void> {
+    try {
+        const chats = await chatRepository.findAllByUser(req.user!.id);
+        res.status(200).json({ success: true, chats });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to fetch chats." });
+    }
+}
+
+// GET /api/chat/:chat_id  — open a chat room, returns all messages
+export async function getChatMessages(req: AuthRequest, res: Response): Promise<void> {
+    const chat_id = req.params.chat_id as string;
+    const user_id = req.user!.id;
+    console.log("the chat is is", chat_id , "and user id is", user_id)
+
+    try {
+        // Verify ownership before returning messages
+        const owned = await chatRepository.findByUserAndId(user_id, chat_id);
+        if (!owned) {
+            res.status(404).json({ message: "Chat not found or access denied." });
+            return;
+        }
+
+        const chat = await chatRepository.findByIdWithMessages(chat_id);
+        res.status(200).json({ success: true, chat });
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({ message: "Failed to fetch messages." });
+    }
+}
+
+// DELETE /api/chat/:chat_id  — soft delete a chat room
+export async function deleteChat(req: AuthRequest, res: Response): Promise<void> {
+    const chat_id = req.params.chat_id as string;
+
+    try {
+        const deleted = await chatRepository.softDelete(chat_id, req.user!.id);
+        if (!deleted) {
+            res.status(404).json({ message: "Chat not found or access denied." });
+            return;
+        }
+        res.status(200).json({ success: true, message: "Chat deleted." });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to delete chat." });
     }
 }

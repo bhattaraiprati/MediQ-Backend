@@ -11,14 +11,14 @@ const pinecone = new Pinecone({
 
 export async function findSimilarChunks(
     query: string,
-    topK: number = 10
+    topK: number = 7 
 ): Promise<ScoredPineconeRecord<RecordMetadata>[]> {
     try {
         const indexName = process.env.PINECONE_INDEX_NAME!;
         const index = pinecone.index(indexName);
 
         const queryEmbedding = await getJinaEmbedding(query);
-        //  const queryEmbedding = truncateTo768(rawEmbedding);
+
         console.log(`Query embedding dimensions: ${queryEmbedding.length}`);
 
         const pineconeQuery = await index.query({

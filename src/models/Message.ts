@@ -7,8 +7,7 @@ export class Message extends Model {
     declare chat_id: string;
     declare role: messageRole;
     declare content: string;
-    declare model_used?: string;
-    declare tokens_used?: number;
+
 }
 
 Message.init({
@@ -27,8 +26,7 @@ Message.init({
         type: DataTypes.TEXT,        // Important: Use TEXT
         allowNull: false 
     },
-    model_used: { type: DataTypes.STRING },
-    tokens_used: { type: DataTypes.INTEGER }
+    
 }, {
     sequelize,
     modelName: "Message",

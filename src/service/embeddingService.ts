@@ -12,7 +12,7 @@ const pinecone = new Pinecone({
 
 
 const textSplitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 1500,
+    chunkSize: 1000,
     chunkOverlap: 200,
 });
 

@@ -1,12 +1,15 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../config/Auth";
+import { Chat } from "../models/Chat";
 
 export interface AuthRequest extends Request {
     user?: {
         id: string;
         email: string;
         role: string;
+        
     };
+    chat?: Chat;
 }
 
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction): void {
