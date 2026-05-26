@@ -6,15 +6,10 @@ import { embedAndStoreDocument } from './embeddingService';
 
 export async function processDocument(documentId: string): Promise<void> {
     // 1. Find the document in the database
-    const doc = await Document.findOne({
-        where: {
-            id: documentId,
-            processing_status: documentStatus.PENDING,
-        },
-    });
+    const doc = await Document.findOne({ where: { id: documentId } });
 
     if (!doc) {
-        console.log("Document not found or not in pending state");
+        console.log("Document not found or not");
         return;
     }
 
@@ -40,6 +35,15 @@ export async function processDocument(documentId: string): Promise<void> {
 
         // 4. Chunk → embed via Ollama → store in Pinecone + DB
         await embedAndStoreDocument(extractedText, documentId);
+
+         // Mark complete only after everything succeeds
+        await Document.update(
+            { processing_status: documentStatus.COMPLETED },
+            { where: { id: documentId } }
+        );
+
+        console.log(`💾 Document ${doc.original_name} fully processed and stored`);
+
 
     } catch (error) {
         console.error("Error processing document:", error);

@@ -1,9 +1,11 @@
 // src/controllers/documentController.ts
 import { Request, Response } from 'express';
+import { AuthRequest } from '../middleware/authmiddleware';
 import cloudinary from '../config/cloudinary';
 import { Document } from '../models/Document';
 import { v4 as uuidv4 } from 'uuid';
 import { processDocument } from '../service/pdfParcerService';
+import { addDocumentToQueue, documentQueue } from '../queues/documentQueue';
 
 export const uploadDocuments = async (req: Request, res: Response) => {
     try {
@@ -41,21 +43,30 @@ export const uploadDocuments = async (req: Request, res: Response) => {
             total_chunks: 0,
         });
 
-        // Trigger PDF processing in the background.
-        // We do NOT await this — the response is returned immediately,
-        // and the embedding happens asynchronously.
-        processDocument(document.id).catch((err) =>
-            console.error(`Background processing failed for doc ${document.id}:`, err)
-        );
+        const jobId = await addDocumentToQueue({
+            documentId: document.id,
+            userId: userId!,
+            originalName: file.originalname,
+        });
+
+         // 4. Get queue position so admin knows where they are in line
+        const waitingCount = await documentQueue.getWaitingCount();
+
+        
+        // processDocument(document.id).catch((err) =>
+        //     console.error(`Background processing failed for doc ${document.id}:`, err)
+        // );
 
         return res.status(201).json({
             success: true,
-            message: 'File uploaded successfully. Processing started in background.',
+            message: 'File uploaded successfully. Added to processing queue.',
             file: {
                 id: document.id,
                 filename: document.original_name,
                 url: document.cloudinary_url,
                 status: document.processing_status,
+                jobId,
+                queuePosition: waitingCount, // 0 = processing now, 1 = next, etc.
             },
         });
 
@@ -68,3 +79,71 @@ export const uploadDocuments = async (req: Request, res: Response) => {
         });
     }
 };
+
+
+// GET /api/documents/status/:id 
+export const getDocumentStatus = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+
+        const document = await Document.findOne({
+            where: { id },
+            attributes: ['id', 'original_name', 'processing_status', 'total_chunks'],
+        });
+
+        if (!document) {
+            return res.status(404).json({ success: false, message: 'Document not found' });
+        }
+
+        // Also check job progress in the queue
+        const job = await documentQueue.getJob(`doc-${id}`);
+        const progress = job ? await job.progress : null;
+        const jobState = job ? await job.getState() : null;
+        // States: waiting | active | completed | failed | delayed | paused
+
+        return res.status(200).json({
+            success: true,
+            document: {
+                id: document.id,
+                name: document.original_name,
+                status: document.processing_status,
+                totalChunks: document.total_chunks,
+                job: job ? { id: job.id, state: jobState, progress } : null,
+            },
+        });
+
+    } catch (error: any) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const getAllDocuments = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+
+        const documents = await Document.findAll({
+            where: { user_id: userId },
+            attributes: ['id', 'original_name', 'file_type', 'created_at', 'processing_status', 'total_chunks'],
+        });
+        
+        if (!documents) {
+            return res.status(404).json({ success: false, message: 'Document not found' });
+        }
+        
+        const mappedDocuments = documents.map(doc => ({
+            id: doc.id,
+            name: doc.original_name,
+            file_type: doc.file_type,
+            createdAt: doc.created_at,
+            status: doc.processing_status,
+            totalChunks: doc.total_chunks,
+        }));
+
+        return res.status(200).json({
+            success: true,
+            documents: mappedDocuments,
+        });
+    } catch (error: any) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+}

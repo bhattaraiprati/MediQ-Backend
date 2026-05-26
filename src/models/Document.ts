@@ -12,8 +12,9 @@ export class Document extends Model {
     declare file_type: string;
     declare processing_status: documentStatus;
     declare total_chunks: number;
+    declare created_at: Date;
+    declare updated_at: Date;
 }
-
 
 Document.init({
     id: {

@@ -6,6 +6,7 @@ import sequelize from './config/db';
 import userRoutes from './routes/userRoutes';
 import documentRoutes from './routes/documentRoutes';
 import chatRoutes from './routes/chatRoutes';
+import { getDocumentWorker } from './workers/documentWorker';
 
 dotenv.config()
 
@@ -45,6 +46,7 @@ const startServer = async () => {
       console.log(`Server running on http://localhost:${port}`);
       console.log(`Base URL: ${process.env.BASE_URL || `http://localhost:${port}`}`);
     });
+    getDocumentWorker();
   } catch (error) {
     console.error('Unable to connect to the database:', error);
     process.exit(1);

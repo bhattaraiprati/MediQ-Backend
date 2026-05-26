@@ -2,14 +2,15 @@
 import { Router } from 'express';
 import { uploadMultiple, uploadSingle } from '../middleware/uploadMiddleware';
 import { authMiddleware } from '../middleware/authmiddleware';
-import { uploadDocuments } from '../controller/documentController';
+import { getAllDocuments, getDocumentStatus, uploadDocuments } from '../controller/documentController';
 
 const router = Router();
 
-router.post('/upload', 
-    authMiddleware, 
-    uploadSingle, 
-    uploadDocuments
-);
+router.use(authMiddleware);
+
+router.post('/upload',  uploadSingle, uploadDocuments);
+router.get('/status/:id', getDocumentStatus);
+router.get('/all', getAllDocuments);
+
 
 export default router;
