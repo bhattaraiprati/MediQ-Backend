@@ -6,6 +6,9 @@ import { Document } from '../models/Document';
 import { v4 as uuidv4 } from 'uuid';
 import { processDocument } from '../service/pdfParcerService';
 import { addDocumentToQueue, documentQueue } from '../queues/documentQueue';
+import { DashboardStats } from '../types/interface';
+import { documentStatus, roleEnum } from '../types/Enum';
+import { User } from '../models/User';
 
 export const uploadDocuments = async (req: Request, res: Response) => {
     try {
@@ -80,42 +83,58 @@ export const uploadDocuments = async (req: Request, res: Response) => {
     }
 };
 
-
-// GET /api/documents/status/:id 
+// GET /api/documents/status/
 export const getDocumentStatus = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
+  try {
+    const documents = await Document.findAll({
+      attributes: [
+        "id",
+        "original_name",
+        "processing_status",
+        "total_chunks",
+      ],
+      order: [["created_at", "DESC"]],
+      limit: 3,
+    });
 
-        const document = await Document.findOne({
-            where: { id },
-            attributes: ['id', 'original_name', 'processing_status', 'total_chunks'],
-        });
-
-        if (!document) {
-            return res.status(404).json({ success: false, message: 'Document not found' });
-        }
-
-        // Also check job progress in the queue
-        const job = await documentQueue.getJob(`doc-${id}`);
-        const progress = job ? await job.progress : null;
-        const jobState = job ? await job.getState() : null;
-        // States: waiting | active | completed | failed | delayed | paused
-
-        return res.status(200).json({
-            success: true,
-            document: {
-                id: document.id,
-                name: document.original_name,
-                status: document.processing_status,
-                totalChunks: document.total_chunks,
-                job: job ? { id: job.id, state: jobState, progress } : null,
-            },
-        });
-
-    } catch (error: any) {
-        return res.status(500).json({ success: false, message: error.message });
+    if (!documents.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No documents found",
+      });
     }
-};
+
+    const documentWithJobs = await Promise.all(
+      documents.map(async (doc) => {
+        const job = await documentQueue.getJob(`doc-${doc.id}`);
+
+        return {
+          id: doc.id,
+          name: doc.original_name,
+          status: doc.processing_status,
+          totalChunks: doc.total_chunks,
+          job: job
+            ? {
+                id: job.id,
+                state: await job.getState(),
+                progress: job.progress,
+              }
+            : null,
+        };
+      })
+    );
+
+    return res.status(200).json({
+      success: true,
+      documents: documentWithJobs,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};            
 
 export const getAllDocuments = async (req: AuthRequest, res: Response) => {
     try {
@@ -147,3 +166,5 @@ export const getAllDocuments = async (req: AuthRequest, res: Response) => {
         return res.status(500).json({ success: false, message: error.message });
     }
 }
+
+

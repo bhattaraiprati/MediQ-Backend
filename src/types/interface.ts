@@ -18,3 +18,16 @@ export interface ChatResponse {
         text_snippet: string;
     }>;
 }
+
+export interface DashboardStats{
+    TotalDocument: number;
+    TotalUsers: number;
+    BlockUser: number;
+}
+
+export interface knowledgeBase {
+    pdf: number;
+    word: number;
+    csv: number;
+    plain: number;
+}

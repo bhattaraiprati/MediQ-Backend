@@ -1,6 +1,6 @@
 import { Model, DataTypes } from "sequelize";
 import sequelize from "../config/db";
-import { roleEnum } from "../types/Enum";
+import { roleEnum, userStatus } from "../types/Enum";
 
 export class User extends Model {
     declare id: string;
@@ -10,7 +10,9 @@ export class User extends Model {
     declare role: roleEnum;
     declare profilePicture: string;
     declare isVerified: boolean;
+    declare status : userStatus.ACTIVE
     declare verificationToken: string | null;
+
 }
 
 User.init({
@@ -41,6 +43,10 @@ User.init({
     profilePicture: {
         type: DataTypes.STRING,
         allowNull: true
+    },
+    status:{
+        type:DataTypes.STRING,
+        allowNull: false
     }
 }, {
     sequelize,

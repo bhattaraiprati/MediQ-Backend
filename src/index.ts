@@ -6,6 +6,7 @@ import sequelize from './config/db';
 import userRoutes from './routes/userRoutes';
 import documentRoutes from './routes/documentRoutes';
 import chatRoutes from './routes/chatRoutes';
+import dashboardRoutes from "./routes/dashboardRoutes"
 import { getDocumentWorker } from './workers/documentWorker';
 
 dotenv.config()
@@ -27,6 +28,8 @@ app.use(express.json());
 app.use('/api/auth', userRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+
 
 
 app.get('/health', (req, res) => {

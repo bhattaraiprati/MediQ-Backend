@@ -30,18 +30,18 @@ async function handleUserSignup(req: Request, res: Response): Promise<void> {
         const verificationToken = crypto.randomBytes(32).toString('hex');
 
         const emailHash = crypto.createHash('md5').update(email.toLowerCase().trim()).digest('hex');
-        const profilePicture = `https://www.gravatar.com/avatar/${emailHash}?d=identicon`;
+        const profilePicture = `https://www.gravatar.com/avatar/${emailHash}?d=robohash`;
 
         await User.create({
-            name, 
-            email, 
+            name,
+            email,
             password: hashedPassword,
             role,
             profilePicture,
             isVerified: false,
             verificationToken
         });
-        
+
         await sendVerificationEmail(email, verificationToken);
 
         res.status(201).json({ message: 'User registered successfully. Please check your email to verify your account.' });
@@ -79,7 +79,7 @@ async function handleUserLogin(req: Request, res: Response): Promise<void> {
         const token = generateToken({ id: user.id, email: user.email, role: user.role });
         // res.setHeader('Authorization', `Bearer ${token}`);
 
-        res.status(200).json({token: token, message: 'Login successful' });
+        res.status(200).json({ token: token, message: 'Login successful' });
     } catch (error) {
         console.error('Error during user login:', error);
         res.status(500).json({ message: 'Internal server error' });
@@ -114,11 +114,50 @@ async function verifyEmail(req: Request, res: Response): Promise<void> {
     }
 }
 
-const profile = async (req:Request, res:Response)=>{
-    const token = req.body.token;
-    
+const profile = async (req: Request, res: Response) => {
+    const id = req.user?.id;
+    console.log("user is is ", id)
+    try {
+        const profileImg = await User.findOne({
+            where: { id },
+            attributes: [
+                "profilePicture"
+            ]
+        })
+    console.log("user profile is  ", profileImg)
+
+        res.status(200).json({
+            message: true,
+            profileImg
+        })
+    }
+    catch (error: any) {
+        res.status(500).json("Something went wrong.")
+    }
+
 }
 
-export { handleUserSignup, handleUserLogin, verifyEmail, profile
- };
+const getAllUser = async (req:Request, res: Response) => {
+    try{
+        const userDetails = await User.findAll({
+            where: {role: roleEnum.USER},
+            attributes:[ "id","name","email", "profilePicture","status"]
+        })
+        if(!userDetails){
+            res.status(404).json("User not found")
+        }
+
+        res.status(200).json({
+            success:true,
+            users: userDetails
+        })
+    }
+    catch(error:any){
+        res.status(500).json("Something went wrong")
+    }
+}
+
+export {
+    handleUserSignup, handleUserLogin, verifyEmail, profile, getAllUser
+};
 
