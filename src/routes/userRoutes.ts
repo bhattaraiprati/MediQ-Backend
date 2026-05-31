@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAllUser, handleUserLogin, handleUserSignup, profile, verifyEmail } from "../controller/userController";
+import { changeUserStatus, getAllUser, handleUserLogin, handleUserSignup, profile, verifyEmail } from "../controller/userController";
 
 // import { createTask, deleteTask, getAllTasks, toggleStatus, updateTask } from "../controller/taskController";
 import { authMiddleware } from "../middleware/authmiddleware";
@@ -13,6 +13,8 @@ try{
     router.get('/verify-email', verifyEmail);
     router.get('/profile', authMiddleware, profile)
     router.get('/allUsers', authMiddleware, getAllUser)
+    router.post('/update/status', authMiddleware, changeUserStatus)
+
 
 
 }catch(error){

@@ -5,6 +5,8 @@ import { DocumentJobData } from '../queues/documentQueue';
 import { processDocument } from '../service/pdfParcerService';
 import { Document } from '../models/Document';
 import { documentStatus } from '../types/Enum';
+import { docsProcessDocument } from '../service/docsParserService';
+import { textProcessDocument } from '../service/textParserService';
 
 let workerInstance: Worker | null = null;
 
@@ -37,10 +39,20 @@ export function getDocumentWorker(): Worker {
             );
 
             await job.updateProgress(20);
-
+            
+            if(doc.file_type == "application/pdf"){
             // processDocument no longer needs to check status — worker owns that
             await processDocument(documentId);
-
+            }
+            else if(doc.file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"){
+                await docsProcessDocument(documentId);
+            }
+            else if(doc.file_type == "text/plain"){
+                await textProcessDocument(documentId);
+            }
+            else{
+                return;
+            }
             await job.updateProgress(100);
             console.log(`[Job ${job.id}] Completed: ${originalName}`);
         },

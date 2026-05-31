@@ -157,7 +157,40 @@ const getAllUser = async (req:Request, res: Response) => {
     }
 }
 
+const changeUserStatus = async (req: Request, res: Response) => {
+    const { id, status } = req.body;     // ← Changed from userId to id
+
+    console.log("Received status:", status);
+    console.log("Received id:", id);
+
+    if (!id || !status) {
+        return res.status(400).json({ message: "ID and status are required" });
+    }
+
+    try {
+        const [updatedRows] = await User.update(
+            { status: status },
+            { where: { id: id } }
+        );
+
+        if (updatedRows === 0) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            message: "User status updated successfully" 
+        });
+    } catch (error: any) {
+        console.error(error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Something went wrong" 
+        });
+    }
+};
+
 export {
-    handleUserSignup, handleUserLogin, verifyEmail, profile, getAllUser
+    handleUserSignup, handleUserLogin, verifyEmail, profile, getAllUser, changeUserStatus
 };
 

@@ -42,7 +42,7 @@ export async function processDocument(documentId: string): Promise<void> {
             { where: { id: documentId } }
         );
 
-        console.log(`💾 Document ${doc.original_name} fully processed and stored`);
+        console.log(`Document ${doc.original_name} fully processed and stored`);
 
 
     } catch (error) {

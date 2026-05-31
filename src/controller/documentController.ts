@@ -4,11 +4,7 @@ import { AuthRequest } from '../middleware/authmiddleware';
 import cloudinary from '../config/cloudinary';
 import { Document } from '../models/Document';
 import { v4 as uuidv4 } from 'uuid';
-import { processDocument } from '../service/pdfParcerService';
 import { addDocumentToQueue, documentQueue } from '../queues/documentQueue';
-import { DashboardStats } from '../types/interface';
-import { documentStatus, roleEnum } from '../types/Enum';
-import { User } from '../models/User';
 
 export const uploadDocuments = async (req: Request, res: Response) => {
     try {
@@ -142,7 +138,7 @@ export const getAllDocuments = async (req: AuthRequest, res: Response) => {
 
         const documents = await Document.findAll({
             where: { user_id: userId },
-            attributes: ['id', 'original_name', 'file_type', 'created_at', 'processing_status', 'total_chunks'],
+            attributes: ['id', 'original_name', 'file_type', 'created_at','cloudinary_url', 'processing_status', 'total_chunks'],
         });
         
         if (!documents) {
@@ -154,6 +150,7 @@ export const getAllDocuments = async (req: AuthRequest, res: Response) => {
             name: doc.original_name,
             file_type: doc.file_type,
             createdAt: doc.created_at,
+            cloudinary_url: doc.cloudinary_url,
             status: doc.processing_status,
             totalChunks: doc.total_chunks,
         }));
